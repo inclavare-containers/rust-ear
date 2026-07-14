@@ -5,7 +5,9 @@ use std::collections::BTreeMap;
 use std::fmt;
 use std::time::{SystemTime, UNIX_EPOCH};
 
+#[cfg(any(feature = "cose", feature = "jwt"))]
 use jsonwebtoken::{self as jwt, jwk};
+#[cfg(feature = "cose")]
 use openssl::{bn, ec, nid::Nid, pkey};
 use serde::{
     de::{self, Deserialize, Visitor},
@@ -20,6 +22,7 @@ use crate::extension::{get_profile, Extensions};
 use crate::id::VerifierID;
 use crate::nonce::Nonce;
 use crate::trust::tier::TrustTier;
+#[cfg(feature = "cose")]
 use cose::message::CoseMessage;
 
 #[allow(clippy::upper_case_acronyms)]
@@ -98,6 +101,7 @@ impl Ear {
 
     /// Decode an EAR from a JWT token, verifying the signature using the specified JWK-encoded
     /// key.
+    #[cfg(feature = "jwt")]
     pub fn from_jwt_jwk(token: &str, alg: Algorithm, key: &[u8]) -> Result<Self, Error> {
         let jwk: jwk::Jwk =
             serde_json::from_slice(key).map_err(|e| Error::KeyError(e.to_string()))?;
@@ -117,6 +121,7 @@ impl Ear {
         Self::from_jwt(token, jwt_alg, &dk)
     }
 
+    #[cfg(feature = "jwt")]
     pub fn from_jwt(
         token: &str,
         alg: jwt::Algorithm,
@@ -134,6 +139,7 @@ impl Ear {
 
     /// Decode an EAR from a COSE token, verifying the signature using the specified JWK-encoded
     /// key.
+    #[cfg(feature = "cose")]
     pub fn from_cose_jwk(token: &[u8], alg: Algorithm, key: &[u8]) -> Result<Self, Error> {
         let jwk: jwk::Jwk =
             serde_json::from_slice(key).map_err(|e| Error::KeyError(e.to_string()))?;
@@ -184,6 +190,7 @@ impl Ear {
         Self::from_cose(token, &cose_key)
     }
 
+    #[cfg(feature = "cose")]
     fn from_cose(token: &[u8], key: &cose::keys::CoseKey) -> Result<Self, Error> {
         let mut sign1 = CoseMessage::new_sign();
 
@@ -197,6 +204,7 @@ impl Ear {
     }
 
     /// Encode the EAR as a JWT token, signing it with the specified PEM-encoded key
+    #[cfg(feature = "jwt")]
     #[allow(clippy::type_complexity)]
     pub fn sign_jwt_pem(&self, alg: Algorithm, key: &[u8]) -> Result<String, Error> {
         let header = &jwt::Header::new(alg_to_jwt_alg(&alg)?);
@@ -205,6 +213,7 @@ impl Ear {
 
     /// Encode the EAR as a JWT token, signing it with the specified PEM-encoded key, and including
     /// the provided headers.
+    #[cfg(feature = "jwt")]
     pub fn sign_jwt_pem_with_header(
         &self,
         header: &jwt::Header,
@@ -231,6 +240,7 @@ impl Ear {
     }
 
     /// Encode the EAR as a JWT token, signing it with the specified DER-encoded key
+    #[cfg(feature = "jwt")]
     pub fn sign_jwk_der(&self, alg: Algorithm, key: &[u8]) -> Result<String, Error> {
         let header = &jwt::Header::new(alg_to_jwt_alg(&alg)?);
         self.sign_jwk_der_with_header(header, key)
@@ -238,6 +248,7 @@ impl Ear {
 
     /// Encode the EAR as a JWT token, signing it with the specified DER-encoded key,
     /// including the specified header(s).
+    #[cfg(feature = "jwt")]
     pub fn sign_jwk_der_with_header(
         &self,
         header: &jwt::Header,
@@ -262,12 +273,14 @@ impl Ear {
     }
 
     /// Encode the EAR as a COSE token, signing it with the specified PEM-encoded key
+    #[cfg(feature = "cose")]
     pub fn sign_cose_pem(&self, alg: Algorithm, key: &[u8]) -> Result<Vec<u8>, Error> {
         let header = new_cose_header(&alg)?;
         self.sign_cose_bytes_with_header(header, key, KeyFormat::PEM)
     }
 
     /// Encode the EAR as a COSE token, signing it with the specified DER-encoded key
+    #[cfg(feature = "cose")]
     pub fn sign_cose_der(&self, alg: Algorithm, key: &[u8]) -> Result<Vec<u8>, Error> {
         let header = new_cose_header(&alg)?;
         self.sign_cose_bytes_with_header(header, key, KeyFormat::DER)
@@ -275,6 +288,7 @@ impl Ear {
 
     /// Encode the EAR as a COSE token with the specified header, signing it with the specified
     /// PEM-encoded key
+    #[cfg(feature = "cose")]
     pub fn sign_cose_pem_with_header(
         &self,
         header: cose::headers::CoseHeader,
@@ -285,6 +299,7 @@ impl Ear {
 
     /// Encode the EAR as a COSE token with the specified header, signing it with the specified
     /// DER-encoded key
+    #[cfg(feature = "cose")]
     pub fn sign_cose_der_with_header(
         &self,
         header: cose::headers::CoseHeader,
@@ -293,6 +308,7 @@ impl Ear {
         self.sign_cose_bytes_with_header(header, key, KeyFormat::DER)
     }
 
+    #[cfg(feature = "cose")]
     fn sign_cose_bytes_with_header(
         &self,
         header: cose::headers::CoseHeader,
@@ -371,6 +387,7 @@ impl Ear {
         self.sign_cose_with_header(header, &cose_key)
     }
 
+    #[cfg(feature = "cose")]
     fn sign_cose_with_header(
         &self,
         header: cose::headers::CoseHeader,
@@ -567,11 +584,13 @@ impl<'de> Visitor<'de> for EarVisitor {
 }
 
 #[inline]
+#[cfg(feature = "jwt")]
 pub fn new_jwt_header(alg: &Algorithm) -> Result<jwt::Header, Error> {
     Ok(jwt::Header::new(alg_to_jwt_alg(alg)?))
 }
 
 #[inline]
+#[cfg(feature = "cose")]
 pub fn new_cose_header(alg: &Algorithm) -> Result<cose::headers::CoseHeader, Error> {
     let cose_alg = alg_to_cose(alg)?;
     let mut header = cose::headers::CoseHeader::new();
@@ -581,6 +600,7 @@ pub fn new_cose_header(alg: &Algorithm) -> Result<cose::headers::CoseHeader, Err
 }
 
 #[inline]
+#[cfg(feature = "jwt")]
 fn alg_to_jwt_alg(alg: &Algorithm) -> Result<jwt::Algorithm, Error> {
     match alg {
         Algorithm::ES256 => Ok(jwt::Algorithm::ES256),
@@ -594,6 +614,7 @@ fn alg_to_jwt_alg(alg: &Algorithm) -> Result<jwt::Algorithm, Error> {
 }
 
 #[inline]
+#[cfg(feature = "cose")]
 fn alg_to_cose(alg: &Algorithm) -> Result<i32, Error> {
     match alg {
         Algorithm::ES256 => Ok(cose::algs::ES256),
@@ -662,6 +683,7 @@ MIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgPp4XZRnRHSMhGg0t
     "#;
 
     #[test]
+    #[cfg(feature = "jwt")]
     fn sign_jwk() {
         let ear = Ear {
             profile: "test".to_string(),
@@ -687,6 +709,7 @@ MIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgPp4XZRnRHSMhGg0t
     }
 
     #[test]
+    #[cfg(feature = "cose")]
     fn cose() {
         let ear = Ear {
             profile: "test".to_string(),
@@ -890,6 +913,7 @@ MIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgPp4XZRnRHSMhGg0t
     }
 
     #[test]
+    #[cfg(feature = "jwt")]
     fn verify() {
         const VERIF_KEY: &str = r#"
         {
